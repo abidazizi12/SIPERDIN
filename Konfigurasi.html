@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    .cfg-row { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .cfg-row:last-child { border-bottom: none; }
+    .cfg-row label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .cfg-row .contoh { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+    input {
+      width: 100%; padding: 9px 12px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--line); font-family: inherit; font-size: 13.5px;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    #msgBox { display: none; }
+  </style>
+</head>
+<body>
+  <?!= include('Menu', {user: user, activePage: activePage, appUrl: appUrl}); ?>
+
+  <div class="content">
+    <div class="eyebrow">⚙️ Admin</div>
+    <h2 style="margin-bottom: 6px;">Konfigurasi Institusi</h2>
+    <p style="color: var(--ink-soft); font-size: 13.5px; margin-bottom: 20px;">
+      Data ini diisi sekali dan dipakai otomatis untuk semua dokumen cetak
+      (SPTJB, SPBY, Kwitansi, Daftar Nominatif) -- tidak perlu diketik ulang tiap Pengajuan.
+    </p>
+
+    <div class="card">
+      <? config.forEach(function(f) { ?>
+        <div class="cfg-row">
+          <div>
+            <label><?= f.label ?></label>
+            <div class="contoh">Contoh: <?= f.contoh ?></div>
+          </div>
+          <input class="cfg-input" data-key="<?= f.key ?>" value="<?= f.value ?>">
+        </div>
+      <? }); ?>
+
+      <div class="divider"></div>
+      <button type="button" class="btn" onclick="simpan()">Simpan Konfigurasi</button>
+      <span id="loadingMsg" style="display:none; margin-left:10px; color: var(--ink-soft); font-size:13px;">Menyimpan...</span>
+      <div id="msgBox" class="note-box"></div>
+    </div>
+  </div>
+
+  <script>
+    function simpan() {
+      const formData = {};
+      document.querySelectorAll('.cfg-input').forEach(function(el) {
+        formData[el.dataset.key] = el.value;
+      });
+      document.getElementById('loadingMsg').style.display = '';
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          const box = document.getElementById('msgBox');
+          box.style.display = '';
+          box.textContent = res.ok ? 'Konfigurasi tersimpan.' : 'Gagal: ' + res.error;
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          alert('Error: ' + err.message);
+        })
+        .simpanKonfigurasi(formData);
+    }
+  </script>
+</body>
+</html>

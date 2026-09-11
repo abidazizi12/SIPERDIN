@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; background: var(--bg); margin:0; }
+    .login-card { width: 340px; padding: 32px; border-radius: var(--radius-sm); background: var(--card); box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+    .login-card h2 { margin: 0 0 4px; color: var(--primary); }
+    .login-card p { color: var(--ink-soft); font-size: 13px; margin: 0 0 20px; }
+    .login-card label { display:block; font-size:12.5px; font-weight:600; color: var(--ink-soft); margin-bottom:5px; }
+    .login-card input {
+      width:100%; padding:10px 12px; border-radius: var(--radius-sm); border:1.5px solid var(--line);
+      font-family:inherit; font-size:13.5px; margin-bottom:14px; box-sizing: border-box;
+    }
+    .login-card button {
+      width:100%; padding:11px; border:none; border-radius: var(--radius-sm);
+      background: var(--primary); color:#fff; font-weight:700; cursor:pointer; font-size:14px;
+    }
+    #errBox { display:none; background:#fdecea; color:#c0392b; padding:9px 12px; border-radius:8px; font-size:12.5px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h2>SIPERDIN</h2>
+    <p>Masuk dengan email dan password yang terdaftar.</p>
+    <div id="errBox"></div>
+    <label>Email</label>
+    <input id="f_email" type="email" placeholder="nama@email.com" onkeydown="if(event.key==='Enter') doLogin();">
+    <label>Password</label>
+    <input id="f_password" type="password" onkeydown="if(event.key==='Enter') doLogin();">
+    <button type="button" onclick="doLogin()">Masuk</button>
+  </div>
+
+  <script>
+    function doLogin() {
+      const email = document.getElementById('f_email').value.trim();
+      const password = document.getElementById('f_password').value;
+      const errBox = document.getElementById('errBox');
+      errBox.style.display = 'none';
+      if (!email || !password) {
+        errBox.textContent = 'Isi email dan password.';
+        errBox.style.display = '';
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.ok) {
+            window.top.location = '<?= appUrl ?>?page=index&token=' + res.token;
+          } else {
+            errBox.textContent = res.error;
+            errBox.style.display = '';
+          }
+        })
+        .withFailureHandler(function(err) {
+          errBox.textContent = 'Error: ' + err.message;
+          errBox.style.display = '';
+        })
+        .login(email, password);
+    }
+  </script>
+</body>
+</html>

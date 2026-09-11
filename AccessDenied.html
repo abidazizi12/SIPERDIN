@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .deny-card { max-width: 420px; text-align: center; }
+    .deny-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--danger-bg); color: var(--danger);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin: 0 auto 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card deny-card">
+    <div class="deny-icon">🔒</div>
+    <h2>Belum Terdaftar</h2>
+    <p style="color: var(--ink-soft);">Akun Google berikut belum terdaftar atau tidak aktif di SIPERDIN:</p>
+    <div class="mono" style="display: block; margin: 14px 0; word-break: break-all;">
+      <?= email ?>
+    </div>
+    <div class="divider"></div>
+    <? if (typeof reason !== 'undefined' && reason) { ?>
+      <p style="color: var(--ink-soft); font-size: 13px;"><?= reason ?></p>
+    <? } else { ?>
+      <p style="color: var(--ink-soft); font-size: 13px;">Hubungi Admin untuk didaftarkan pada sheet <b>USERS</b>.</p>
+    <? } ?>
+  </div>
+</body>
+</html>

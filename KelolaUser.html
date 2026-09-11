@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { text-align: left; padding: 10px 12px; color: var(--ink-soft); font-size: 11px; text-transform: uppercase; border-bottom: 2px solid var(--line); }
+    .data-table td { padding: 12px; border-bottom: 1px solid var(--line); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 20px; }
+    @media (max-width: 900px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; }
+    input, select { width: 100%; padding: 9px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--line); font-family: inherit; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <?!= include('Menu', {user: user, activePage: activePage, appUrl: appUrl}); ?>
+
+  <div class="content">
+    <div class="eyebrow">👥 Admin</div>
+    <h2 style="margin-bottom: 20px;">Kelola User</h2>
+
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="form-grid">
+        <div><label>Email</label><input id="f_email" placeholder="nama@email.com"></div>
+        <div><label>Nama</label><input id="f_nama"></div>
+        <div><label>Role</label><select id="f_role"><option>Staff</option><option>Admin</option></select></div>
+        <div><label>Password Awal</label><input id="f_password" type="password" placeholder="min. 6 karakter"></div>
+        <button type="button" class="btn" onclick="tambah()">+ Tambah</button>
+      </div>
+      <div id="msgBox" style="display:none;" class="note-box"></div>
+    </div>
+
+    <div class="card">
+      <table class="data-table">
+        <thead><tr><th>Email</th><th>Nama</th><th>Role</th><th>Status</th><th></th></tr></thead>
+        <tbody id="userTbody">
+          <? userList.forEach(function(u) { ?>
+            <tr>
+              <td class="mono"><?= u.email ?></td>
+              <td><?= u.nama ?></td>
+              <td><span class="status-pill ok"><?= u.role ?></span></td>
+              <td><span class="status-pill <?= u.status === 'Aktif' ? 'ok' : 'danger' ?>"><?= u.status ?></span></td>
+              <td style="white-space:nowrap;">
+                <button type="button" class="btn outline" style="padding:6px 12px; font-size:12px;"
+                  onclick="toggleStatus('<?= u.email ?>', '<?= u.status === 'Aktif' ? 'Nonaktif' : 'Aktif' ?>')">
+                  <?= u.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan' ?>
+                </button>
+                <button type="button" class="btn outline" style="padding:6px 12px; font-size:12px; margin-left:6px;"
+                  onclick="resetPassword('<?= u.email ?>')">
+                  Reset Password
+                </button>
+              </td>
+            </tr>
+          <? }); ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function tambah() {
+      const email = document.getElementById('f_email').value.trim();
+      const nama = document.getElementById('f_nama').value.trim();
+      const role = document.getElementById('f_role').value;
+      const password = document.getElementById('f_password').value;
+      if (!email || !nama || !password) { alert('Isi email, nama, dan password awal.'); return; }
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          const box = document.getElementById('msgBox');
+          box.style.display = '';
+          box.textContent = res.ok ? 'User ditambahkan.' : 'Gagal: ' + res.error;
+          if (res.ok) setTimeout(function() { window.location.reload(); }, 800);
+        })
+        .tambahUser({ email: email, nama: nama, role: role, password: password });
+    }
+
+    function toggleStatus(email, statusBaru) {
+      google.script.run
+        .withSuccessHandler(function() { window.location.reload(); })
+        .ubahStatusUser(email, statusBaru);
+    }
+
+    function resetPassword(email) {
+      const pwBaru = prompt('Password baru untuk ' + email + ':');
+      if (!pwBaru) return;
+      google.script.run
+        .withSuccessHandler(function(res) {
+          alert(res.ok ? 'Password berhasil diganti.' : 'Gagal: ' + res.error);
+        })
+        .setPasswordAdmin_(email, pwBaru);
+    }
+  </script>
+</body>
+</html>

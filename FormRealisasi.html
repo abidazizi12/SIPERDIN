@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; }
+    input, select {
+      width: 100%; padding: 9px 12px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--line); font-family: inherit; font-size: 13.5px;
+      background: var(--card);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--primary); }
+    .section-title { font-size: 13px; font-weight: 700; color: var(--primary); margin: 22px 0 12px; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .checkbox-row input { width: auto; }
+    #resultBox { display: none; }
+  </style>
+</head>
+<body>
+  <?!= include('Menu', {user: user, activePage: activePage, appUrl: appUrl}); ?>
+
+  <div class="content">
+    <div class="eyebrow">🧾 Form</div>
+    <h2 style="margin-bottom: 20px;">Input Realisasi Perjalanan</h2>
+
+    <div class="card">
+      <div class="section-title">1. Pilih Orang / Trip</div>
+      <label>Baris Pengajuan</label>
+      <select id="f_idBaris" onchange="onPengajuanChange()">
+        <option value="">-- pilih --</option>
+        <? pengajuanList.forEach(function(p) { ?>
+          <option value="<?= p.idBaris ?>" data-provinsi="<?= p.provinsi ?>"><?= p.nama ?> — <?= p.tujuan ?> (<?= p.noSptjb ?>, <?= p.tglBerangkat ?>)</option>
+        <? }); ?>
+      </select>
+      <div id="tarifSaranBox" class="note-box" style="display:none;"></div>
+
+      <div class="section-title">2. Dokumen</div>
+      <div class="form-grid">
+        <div><label>No SK</label><input id="f_noSk"></div>
+        <div><label>No ST</label><input id="f_noSt"></div>
+        <div><label>Tanggal SK</label><input type="date" id="f_tanggalSk"></div>
+        <div><label>Tanggal ST</label><input type="date" id="f_tanggalSt"></div>
+      </div>
+
+      <div class="section-title">3. Transport</div>
+      <div class="form-grid">
+        <div><label>Sarana Transportasi</label><input id="f_sarana"></div>
+        <div><label>Transport Kedudukan-Bandara (Rp)</label><input type="number" id="f_transportKedudukan"></div>
+        <div><label>Transport Bandara-Tujuan (Rp)</label><input type="number" id="f_transportTujuan"></div>
+        <div><label>Transport Lainnya (Rp)</label><input type="number" id="f_transportLainnya"></div>
+      </div>
+
+      <div class="section-title">4. Tiket</div>
+      <div class="form-grid">
+        <div><label>Tanggal Berangkat</label><input type="date" id="f_tanggalBerangkat"></div>
+        <div><label>Harga Tiket Berangkat (Rp)</label><input type="number" id="f_hargaTiketBerangkat"></div>
+        <div><label>No Tiket Berangkat</label><input id="f_noTiketBerangkat"></div>
+        <div><label>Seat Berangkat</label><input id="f_seatBerangkat"></div>
+        <div><label>Tanggal Pulang</label><input type="date" id="f_tanggalPulang"></div>
+        <div><label>Harga Tiket Pulang (Rp)</label><input type="number" id="f_hargaTiketPulang"></div>
+        <div><label>No Tiket Pulang</label><input id="f_noTiketPulang"></div>
+        <div><label>Seat Pulang</label><input id="f_seatPulang"></div>
+      </div>
+
+      <div class="section-title">5. Hotel & Uang Harian</div>
+      <div class="form-grid">
+        <div><label>Nama Hotel</label><input id="f_namaHotel"></div>
+        <div><label>Tarif Hotel / malam (Rp)</label><input type="number" id="f_tarifHotel"></div>
+        <div><label>Jumlah Malam</label><input type="number" id="f_malam"></div>
+        <div><label>Uang Harian / hari (Rp)</label><input type="number" id="f_uangHarianSatuan"></div>
+        <div><label>Uang Representative/Administrasi/Narasumber (Rp)</label><input type="number" id="f_uangRepresentative"></div>
+      </div>
+
+      <div class="section-title">6. Kontrak / Pengadaan (jika ada)</div>
+      <div class="form-grid">
+        <div><label>Tanggal Kontrak/Pembelian</label><input type="date" id="f_tanggalKontrak"></div>
+        <div><label>Harga Kontrak (Rp)</label><input type="number" id="f_hargaKontrak"></div>
+        <div><label>Pax/Unit</label><input id="f_paxUnit"></div>
+        <div><label>Total Harga Kontrak (Rp)</label><input type="number" id="f_totalHargaKontrak"></div>
+      </div>
+
+      <div class="section-title">7. Kelengkapan Dokumen</div>
+      <div class="checkbox-row"><input type="checkbox" id="f_kelengkapanSt"><label style="margin:0;">Surat Tugas (ST)</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="f_kelengkapanSpj"><label style="margin:0;">SPJ / Kontrak</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="f_kelengkapanBast"><label style="margin:0;">BAST</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="f_kelengkapanSk"><label style="margin:0;">SK</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="f_kelengkapanLaporan"><label style="margin:0;">Laporan Kegiatan</label></div>
+
+      <div class="divider"></div>
+      <button type="button" class="btn" onclick="submitForm()">Simpan Realisasi</button>
+      <span id="loadingMsg" style="display:none; margin-left: 10px; color: var(--ink-soft); font-size: 13px;">Menyimpan...</span>
+
+      <div id="resultBox" class="note-box"></div>
+    </div>
+  </div>
+
+  <script>
+    function val(id) { return document.getElementById(id).value; }
+    function chk(id) { return document.getElementById(id).checked; }
+
+    function onPengajuanChange() {
+      const sel = document.getElementById('f_idBaris');
+      const opt = sel.options[sel.selectedIndex];
+      const provinsi = opt ? opt.dataset.provinsi : '';
+      const box = document.getElementById('tarifSaranBox');
+      if (!provinsi) { box.style.display = 'none'; return; }
+
+      google.script.run
+        .withSuccessHandler(function(tarif) {
+          if (tarif.uangHarian) document.getElementById('f_uangHarianSatuan').value = tarif.uangHarian;
+          if (tarif.tarifHotel) document.getElementById('f_tarifHotel').value = tarif.tarifHotel;
+          box.style.display = '';
+          box.textContent = 'Saran batas maksimal SBM untuk ' + provinsi + ': Uang Harian Rp' +
+            tarif.uangHarian.toLocaleString('id-ID') + '/hari, Hotel Rp' + tarif.tarifHotel.toLocaleString('id-ID') +
+            '/malam. Ini batas atas -- boleh disesuaikan turun sesuai kondisi riil di lapangan.';
+        })
+        .getTarifSaran(provinsi);
+    }
+
+    function submitForm() {
+      const idBaris = val('f_idBaris');
+      if (!idBaris) { alert('Pilih baris pengajuan dulu.'); return; }
+
+      const formData = {
+        idBaris: idBaris,
+        noSk: val('f_noSk'), noSt: val('f_noSt'),
+        tanggalSk: val('f_tanggalSk'), tanggalSt: val('f_tanggalSt'),
+        saranaTransportasi: val('f_sarana'),
+        transportKedudukan: val('f_transportKedudukan'), transportTujuan: val('f_transportTujuan'), transportLainnya: val('f_transportLainnya'),
+        tanggalBerangkat: val('f_tanggalBerangkat'), hargaTiketBerangkat: val('f_hargaTiketBerangkat'), noTiketBerangkat: val('f_noTiketBerangkat'), seatBerangkat: val('f_seatBerangkat'),
+        tanggalPulang: val('f_tanggalPulang'), hargaTiketPulang: val('f_hargaTiketPulang'), noTiketPulang: val('f_noTiketPulang'), seatPulang: val('f_seatPulang'),
+        namaHotel: val('f_namaHotel'), tarifHotel: val('f_tarifHotel'), malam: val('f_malam'),
+        uangHarianSatuan: val('f_uangHarianSatuan'), uangRepresentative: val('f_uangRepresentative'),
+        tanggalKontrak: val('f_tanggalKontrak'), hargaKontrak: val('f_hargaKontrak'), paxUnit: val('f_paxUnit'), totalHargaKontrak: val('f_totalHargaKontrak'),
+        kelengkapanSt: chk('f_kelengkapanSt'), kelengkapanSpj: chk('f_kelengkapanSpj'), kelengkapanBast: chk('f_kelengkapanBast'),
+        kelengkapanSk: chk('f_kelengkapanSk'), kelengkapanLaporan: chk('f_kelengkapanLaporan')
+      };
+
+      document.getElementById('loadingMsg').style.display = '';
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          const box = document.getElementById('resultBox');
+          box.style.display = '';
+          if (res.ok) {
+            box.textContent = 'Berhasil disimpan! Total Realisasi: Rp' + res.totalRealisasi.toLocaleString('id-ID');
+            setTimeout(function() { window.top.location = '<?= appUrl ?>?page=index'; }, 1500);
+          } else {
+            box.textContent = 'Gagal: ' + res.error;
+          }
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          alert('Error: ' + err.message);
+        })
+        .submitRealisasi(formData);
+    }
+  </script>
+</body>
+</html>

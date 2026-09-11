@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <?!= include('Menu', {user: user, activePage: activePage, appUrl: appUrl}); ?>
+
+  <div class="content">
+    <div class="card">
+      <div class="eyebrow">📍 Halaman · <?= activePage ?></div>
+      <h2>Selamat datang, <?= user.nama.split(' ')[0] ?> 👋</h2>
+      <p style="color: var(--ink-soft);">
+        <span class="mono"><?= user.email ?></span>
+        &nbsp;<span class="status-pill ok"><?= user.role ?></span>
+      </p>
+
+      <div class="divider"></div>
+
+      <? if (typeof note !== 'undefined' && note) { ?>
+        <div class="note-box"><?= note ?></div>
+      <? } ?>
+    </div>
+  </div>
+</body>
+</html>

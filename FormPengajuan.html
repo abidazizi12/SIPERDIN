@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+  <style>
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid.full { grid-template-columns: 1fr; }
+    @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; }
+    input, select {
+      width: 100%; padding: 9px 12px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--line); font-family: inherit; font-size: 13.5px;
+      background: var(--card);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--primary); }
+    .section-title { font-size: 13px; font-weight: 700; color: var(--primary); margin: 22px 0 12px; }
+    .trip-block { border: 1.5px dashed var(--line); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 18px; }
+    .trip-block-head { display:flex; justify-content:space-between; align-items:center; }
+    .orang-block { padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+    .orang-row {
+      display: grid; grid-template-columns: 2fr 1.2fr 1fr 1fr auto;
+      gap: 10px; align-items: end;
+    }
+    .o-nip[readonly] { background: var(--bg); color: var(--ink-soft); }
+    .nominatif-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; margin-top: 10px; padding: 10px; background: var(--bg); border-radius: var(--radius-sm);
+    }
+    @media (max-width: 700px) { .nominatif-row { grid-template-columns: repeat(2, 1fr); } }
+    .nominatif-row label { font-size: 11px; margin-bottom: 3px; }
+    .nominatif-row input { padding: 7px 8px; font-size: 12.5px; }
+    .n-total { font-weight: 700; }
+    .nominatif-note { font-size: 11px; color: var(--ink-soft); margin-top: 6px; grid-column: 1 / -1; }
+    .remove-btn { background: var(--danger-bg); color: var(--danger); border: none; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+    .remove-trip-btn { background: var(--danger-bg); color: var(--danger); border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    #resultBox { display: none; }
+  </style>
+</head>
+<body>
+  <?!= include('Menu', {user: user, activePage: activePage, appUrl: appUrl}); ?>
+
+  <div class="content">
+    <div class="eyebrow">📝 Form</div>
+    <h2 style="margin-bottom: 20px;">Buat Pengajuan Baru</h2>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title" style="margin-top:0;">🔎 Cari &amp; Edit Pengajuan yang Sudah Ada</div>
+      <div style="display:flex; gap:10px; align-items:end;">
+        <div style="flex:1;">
+          <label>Cari (nama orang / tujuan)</label>
+          <input id="f_cariEdit" placeholder="Ketik lalu tekan Enter..." onkeydown="if(event.key==='Enter') cariPengajuan();">
+        </div>
+        <button type="button" class="btn outline" onclick="cariPengajuan()">Cari</button>
+        <button type="button" class="btn outline" id="btnBuatBaru" style="display:none;" onclick="resetKeFormBaru()">+ Buat Pengajuan Baru</button>
+      </div>
+      <div id="hasilCariBox" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">1. Kegiatan / SPTJB</div>
+      <p id="editIndicator" style="display:none; color: var(--danger); font-size: 12.5px; font-weight:700;">✏️ Sedang MENGEDIT pengajuan yang sudah ada (1 Surat Tugas)</p>
+      <p id="previewSptjbBox" style="color: var(--primary); font-size: 13px; font-weight: 600; margin-top: -6px; background: var(--bg); padding: 8px 12px; border-radius: 8px; display: inline-block;">
+        Menghitung No SPTJB berikutnya...
+      </p>
+
+      <div class="form-grid full" style="margin-bottom:14px;">
+        <div>
+          <label>SPTJB</label>
+          <select id="f_sptjbPilihan" onchange="onSptjbPilihanChange()">
+            <option value="">+ Buat SPTJB Baru</option>
+            <? sptjbList.forEach(function(s) { ?>
+              <option value="<?= s.idSptjb ?>" data-noakun="<?= s.noAkun ?>"><?= s.noSptjb ?> — <?= s.kegiatan ?></option>
+            <? }); ?>
+          </select>
+          <p style="font-size:11.5px; color:var(--ink-soft); margin-top:6px;">
+            1 SPTJB bisa berisi beberapa Surat Tugas (di bawah), asalkan akunnya sama. Kalau pilih SPTJB yang sudah ada,
+            No Akun ikut SPTJB itu otomatis.
+          </p>
+        </div>
+      </div>
+
+      <div id="sptjbBaruBlock">
+        <div class="form-grid">
+          <div><label>Kegiatan (SPTJB)</label><input id="f_kegiatan"></div>
+          <div><label>Tanggal Mulai</label><input type="date" id="f_tglMulai"></div>
+          <div><label>Tanggal Selesai</label><input type="date" id="f_tglSelesai"></div>
+          <div><label>No Akun</label><input id="f_noAkun" readonly></div>
+          <div><label>Nama Akun</label><input id="f_namaAkun" readonly></div>
+          <div>
+            <label>Kegiatan</label>
+            <select id="sel_kegiatan" onchange="onKegiatanChange()"><option value="">-- pilih --</option></select>
+          </div>
+          <div>
+            <label>Output</label>
+            <select id="sel_output" onchange="onOutputChange()"><option value="">-- pilih Kegiatan dulu --</option></select>
+          </div>
+          <div>
+            <label>Sub Output</label>
+            <select id="sel_suboutput" onchange="onSubOutputChange()"><option value="">-- pilih Output dulu --</option></select>
+          </div>
+          <div>
+            <label>Akun</label>
+            <select id="sel_akun" onchange="onAkunChange()"><option value="">-- pilih SubOutput dulu --</option></select>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>Klasifikasi Anggaran (otomatis)</label>
+            <input id="f_klasifikasiAnggaran" readonly style="background: var(--bg); color: var(--ink-soft);">
+          </div>
+          <div><label>Jumlah Pengajuan (Rp)</label><input type="number" id="f_jumlahPengajuan"></div>
+        </div>
+      </div>
+
+      <div class="section-title">2. Surat Tugas &amp; Orang yang Ikut</div>
+      <p style="color: var(--ink-soft); font-size: 12.5px; margin-top: -6px;">
+        Nilai nominatif adalah <b>saran batas maksimal SBM</b> — tetap bisa disesuaikan manual sebelum disimpan.
+        Kolom <b>Transport (non-SBM)</b> tidak ada rujukan tarif otomatis, isi manual kalau ada.
+      </p>
+      <div id="tripBlocksContainer"></div>
+      <button type="button" class="btn outline" id="btnTambahTrip" style="margin-top: 4px;" onclick="tambahTripBlock()">+ Tambah Surat Tugas</button>
+
+      <div class="divider"></div>
+      <button type="button" class="btn" id="btnSimpan" onclick="submitForm()">Simpan Pengajuan</button>
+      <span id="loadingMsg" style="display:none; margin-left: 10px; color: var(--ink-soft); font-size: 13px;">Menyimpan...</span>
+
+      <div id="resultBox" class="note-box"></div>
+    </div>
+  </div>
+
+  <script>
+    const pegawaiList = <?!= JSON.stringify(pegawaiList) ?>;
+    const refAkun = <?!= JSON.stringify(refAkun) ?>;
+    const kodeProgram = <?!= JSON.stringify(kodeProgram) ?>;
+    const currentToken = <?!= JSON.stringify(getCurrentToken_()) ?>;
+    const daftarPengajuan = <?!= JSON.stringify(daftarPengajuan) ?>;
+    let editIdPengajuan = null;
+
+    function isiOpsiSimple(selectEl, items, placeholder) {
+      selectEl.innerHTML = '<option value="">' + placeholder + '</option>' +
+        items.map(function(v) { return '<option value="' + v.replace(/"/g,'') + '">' + v + '</option>'; }).join('');
+    }
+
+    function muatPreviewNoSptjb() {
+      const box = document.getElementById('previewSptjbBox');
+      box.textContent = 'Menghitung No SPTJB berikutnya...';
+      google.script.run
+        .withSuccessHandler(function(noSptjb) { box.textContent = 'No SPTJB yang akan terbentuk: ' + noSptjb; })
+        .withFailureHandler(function(err) {
+          box.textContent = 'No SPTJB akan digenerate otomatis saat disimpan.';
+          console.error('Gagal ambil preview No SPTJB:', err.message);
+        })
+        .previewNoSptjb();
+    }
+    muatPreviewNoSptjb();
+
+    function onSptjbPilihanChange() {
+      const idSptjb = document.getElementById('f_sptjbPilihan').value;
+      const isBaru = !idSptjb;
+      document.getElementById('sptjbBaruBlock').style.display = isBaru ? '' : 'none';
+      document.getElementById('previewSptjbBox').style.display = isBaru ? 'inline-block' : 'none';
+    }
+
+    function isiOpsi(selectEl, items, getLabel, placeholder) {
+      selectEl.innerHTML = '<option value="">' + placeholder + '</option>' +
+        items.map(function(it) { return '<option value="' + it.kode + '">' + getLabel(it) + '</option>'; }).join('');
+    }
+
+    function initKegiatanDropdown() {
+      isiOpsi(document.getElementById('sel_kegiatan'), refAkun.kegiatan,
+        function(k) { return k.kode + ' — ' + k.nama; }, '-- pilih Kegiatan --');
+    }
+    initKegiatanDropdown();
+
+    function onKegiatanChange() {
+      const kode = document.getElementById('sel_kegiatan').value;
+      const outputs = refAkun.output.filter(function(o) { return o.kegiatanKode === kode; });
+      isiOpsi(document.getElementById('sel_output'), outputs,
+        function(o) { return o.kode + ' — ' + o.nama; }, outputs.length ? '-- pilih Output --' : '-- tidak ada Output --');
+      resetDownstream('output');
+    }
+
+    function onOutputChange() {
+      const kegiatanKode = document.getElementById('sel_kegiatan').value;
+      const outputKode = document.getElementById('sel_output').value;
+      const subs = refAkun.suboutput.filter(function(s) { return s.kegiatanKode === kegiatanKode && s.outputKode === outputKode; });
+      isiOpsi(document.getElementById('sel_suboutput'), subs,
+        function(s) { return s.kode + ' — ' + s.nama; }, subs.length ? '-- pilih Sub Output --' : '-- tidak ada Sub Output --');
+      resetDownstream('suboutput');
+    }
+
+    function onSubOutputChange() {
+      const kegiatanKode = document.getElementById('sel_kegiatan').value;
+      const outputKode = document.getElementById('sel_output').value;
+      const subKode = document.getElementById('sel_suboutput').value;
+      const akuns = refAkun.akun.filter(function(a) {
+        return a.kegiatanKode === kegiatanKode && a.outputKode === outputKode && a.suboutputKode === subKode;
+      });
+      isiOpsi(document.getElementById('sel_akun'), akuns,
+        function(a) { return a.kode + ' — ' + a.nama; }, akuns.length ? '-- pilih Akun --' : '-- tidak ada Akun --');
+      resetDownstream('akun');
+    }
+
+    function onAkunChange() {
+      const akunKode = document.getElementById('sel_akun').value;
+      const akun = refAkun.akun.find(function(a) { return a.kode === akunKode; });
+      if (!akun) {
+        document.getElementById('f_noAkun').value = '';
+        document.getElementById('f_namaAkun').value = '';
+        document.getElementById('f_klasifikasiAnggaran').value = '';
+        return;
+      }
+      document.getElementById('f_noAkun').value = akun.kode;
+      document.getElementById('f_namaAkun').value = akun.nama;
+      const subSuffix = akun.suboutputKode && akun.suboutputKode.indexOf('.') !== -1
+        ? akun.suboutputKode.split('.')[1] : (akun.suboutputKode || '');
+      const parts = [kodeProgram, akun.kegiatanKode, akun.outputKode, subSuffix, akun.kode].filter(Boolean);
+      document.getElementById('f_klasifikasiAnggaran').value = parts.join('.');
+    }
+
+    function resetDownstream(fromLevel) {
+      if (fromLevel === 'output' || fromLevel === 'kegiatan') {
+        document.getElementById('sel_suboutput').innerHTML = '<option value="">-- pilih Output dulu --</option>';
+        document.getElementById('sel_akun').innerHTML = '<option value="">-- pilih SubOutput dulu --</option>';
+      }
+      if (fromLevel === 'suboutput') {
+        document.getElementById('sel_akun').innerHTML = '<option value="">-- pilih SubOutput dulu --</option>';
+      }
+      document.getElementById('f_noAkun').value = '';
+      document.getElementById('f_namaAkun').value = '';
+      document.getElementById('f_klasifikasiAnggaran').value = '';
+    }
+
+    let tripCount = 0;
+    let orangCount = 0;
+
+    function tambahTripBlock() {
+      tripCount++;
+      const tripId = 'trip_' + tripCount;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'trip-block';
+      wrapper.id = tripId;
+      wrapper.innerHTML =
+        '<div class="trip-block-head">' +
+          '<div class="section-title" style="margin-top:0;">Surat Tugas #' + tripCount + '</div>' +
+          '<button type="button" class="remove-trip-btn" onclick="hapusTripBlock(\'' + tripId + '\')">✕ Hapus ST ini</button>' +
+        '</div>' +
+        '<div class="form-grid">' +
+          '<div><label>Tujuan</label><input class="t-tujuan"></div>' +
+          '<div><label>Provinsi</label><select class="t-provinsi" onchange="onTripProvinsiChange(\'' + tripId + '\'); recalcTripNominatif(\'' + tripId + '\')"><option value="">-- pilih provinsi --</option></select></div>' +
+          '<div><label>Daerah (Kab/Kota)</label><select class="t-daerah" onchange="recalcTripNominatif(\'' + tripId + '\')"><option value="">-- pilih provinsi dulu --</option></select></div>' +
+          '<div><label>Hotel / Tempat / Vendor</label><input class="t-hotelvendor"></div>' +
+          '<div><label>Tanggal Berangkat</label><input type="date" class="t-tglberangkat" onchange="recalcTripNominatif(\'' + tripId + '\')"></div>' +
+          '<div><label>Tanggal Kembali</label><input type="date" class="t-tglkembali" onchange="recalcTripNominatif(\'' + tripId + '\')"></div>' +
+          '<div><label>No SPM <span style="font-weight:400; color:var(--ink-soft);">(kosongkan dulu kalau belum terbit)</span></label><input class="t-nospm"></div>' +
+          '<div><label>No Surat Tugas</label><input class="t-nost" placeholder="mis. 3.4/457/PK.03/VII/2026"></div>' +
+          '<div><label>No SK <span style="font-weight:400; color:var(--ink-soft);">(1 Surat Tugas = 1 SK)</span></label><input class="t-nosk"></div>' +
+          '<div><label>Tahap</label><input class="t-tahap"></div>' +
+          '<div><label>Kegiatan (Surat Tugas)</label><input class="t-kegiatantrip"></div>' +
+        '</div>' +
+        '<div class="section-title">Orang yang Ikut &amp; Rincian Nominatif</div>' +
+        '<div class="orangContainer"></div>' +
+        '<button type="button" class="btn outline" style="margin-top:10px;" onclick="tambahBarisOrang(\'' + tripId + '\')">+ Tambah Orang</button>';
+
+      document.getElementById('tripBlocksContainer').appendChild(wrapper);
+
+      google.script.run
+        .withSuccessHandler(function(list) { isiOpsiSimple(wrapper.querySelector('.t-provinsi'), list, '-- pilih provinsi --'); })
+        .withFailureHandler(function(err) { console.error('Gagal ambil daftar provinsi:', err.message); })
+        .getProvinsiList();
+
+      tambahBarisOrang(tripId);
+      return tripId;
+    }
+
+    function hapusTripBlock(tripId) {
+      const semua = document.querySelectorAll('.trip-block');
+      if (semua.length <= 1) {
+        alert('Minimal harus ada 1 Surat Tugas.');
+        return;
+      }
+      document.getElementById(tripId).remove();
+    }
+
+    function onTripProvinsiChange(tripId) {
+      const wrapper = document.getElementById(tripId);
+      const provinsi = wrapper.querySelector('.t-provinsi').value;
+      const daerahSelect = wrapper.querySelector('.t-daerah');
+      if (!provinsi) { isiOpsiSimple(daerahSelect, [], '-- pilih provinsi dulu --'); return; }
+      isiOpsiSimple(daerahSelect, [], 'Memuat...');
+      google.script.run
+        .withSuccessHandler(function(list) { isiOpsiSimple(daerahSelect, list, list.length ? '-- pilih kab/kota --' : '-- tidak ada data --'); })
+        .withFailureHandler(function(err) {
+          isiOpsiSimple(daerahSelect, [], '-- gagal memuat --');
+          console.error('Gagal ambil daftar kab/kota:', err.message);
+        })
+        .getDaerahByProvinsi(provinsi);
+    }
+
+    function tambahBarisOrang(tripId) {
+      orangCount++;
+      const id = 'orang_' + orangCount;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'orang-block';
+      wrapper.id = id;
+
+      const options = pegawaiList.map(function(p) {
+        return '<option value="' + p.nama.replace(/"/g,'') + '">' + p.nama + '</option>';
+      }).join('');
+
+      wrapper.innerHTML =
+        '<div class="orang-row">' +
+          '<div><label>Nama</label><input list="pegawaiOpts_' + id + '" class="o-nama" placeholder="Ketik atau pilih nama" oninput="onNamaOrangChange(this)"><datalist id="pegawaiOpts_' + id + '">' + options + '</datalist></div>' +
+          '<div><label>NIP</label><input class="o-nip" placeholder="otomatis / isi manual"></div>' +
+          '<div><label>Tipe</label><select class="o-tipe"><option>Penyelenggara</option><option>Peserta</option><option>Narasumber</option></select></div>' +
+          '<div><label>Kelompok</label><input class="o-kelompok"></div>' +
+          '<button type="button" class="remove-btn" onclick="document.getElementById(\'' + id + '\').remove()">✕</button>' +
+        '</div>' +
+        '<div class="nominatif-row">' +
+          '<div><label>Transport Tiket <span style="font-weight:400;">(pesawat/kereta, ada SBM)</span></label><input type="number" class="n-transportpp" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Transport Kedudukan</label><input type="number" class="n-transportkedudukan" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Transport Tujuan</label><input type="number" class="n-transporttujuan" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Transport <span style="font-weight:400;">(non-SBM, manual)</span></label><input type="number" class="n-transportlainnya" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Uang Harian</label><input type="number" class="n-uangharian" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Penginapan</label><input type="number" class="n-penginapan" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Uang Representatif</label><input type="number" class="n-uangrepresentatif" value="0" oninput="hitungTotalRow(\'' + id + '\')"></div>' +
+          '<div><label>Total</label><input type="number" class="n-total" value="0" readonly></div>' +
+          '<div class="nominatif-note">Transport Tiket/Kedudukan/Tujuan = saran otomatis dari SBM. Transport (non-SBM) selalu manual.</div>' +
+        '</div>';
+
+      document.getElementById(tripId).querySelector('.orangContainer').appendChild(wrapper);
+    }
+
+    function onNamaOrangChange(inputEl) {
+      const orangWrapper = inputEl.closest('.orang-block');
+      const tripId = inputEl.closest('.trip-block').id;
+      const nipInput = orangWrapper.querySelector('.o-nip');
+      const match = pegawaiList.find(function(p) { return p.nama === inputEl.value; });
+      if (match) {
+        nipInput.value = match.nip || '';
+        nipInput.setAttribute('readonly', 'readonly');
+        hitungNominatifRow(orangWrapper.id, tripId);
+      } else {
+        nipInput.removeAttribute('readonly');
+      }
+    }
+
+    function hitungNominatifRow(orangId, tripId) {
+      const orangWrapper = document.getElementById(orangId);
+      const tripWrapper = document.getElementById(tripId);
+      const nama = orangWrapper.querySelector('.o-nama').value;
+      const provinsi = tripWrapper.querySelector('.t-provinsi').value;
+      const kabKota = tripWrapper.querySelector('.t-daerah').value;
+      const lamaHari = hitungLamaHariClient(tripWrapper.querySelector('.t-tglberangkat').value, tripWrapper.querySelector('.t-tglkembali').value);
+      if (!nama || !provinsi || !kabKota || !lamaHari) return;
+
+      google.script.run
+        .withSuccessHandler(function(saran) {
+          orangWrapper.querySelector('.n-transportpp').value = saran.transportPP;
+          orangWrapper.querySelector('.n-transportkedudukan').value = saran.transportKedudukan;
+          orangWrapper.querySelector('.n-transporttujuan').value = saran.transportTujuan;
+          orangWrapper.querySelector('.n-uangharian').value = saran.uangHarian;
+          orangWrapper.querySelector('.n-penginapan').value = saran.penginapan;
+          orangWrapper.querySelector('.n-uangrepresentatif').value = saran.uangRepresentatif;
+          hitungTotalRow(orangId);
+        })
+        .withFailureHandler(function(err) { console.error('Gagal ambil saran nominatif:', err.message); })
+        .hitungNominatifSaran({ namaPegawai: nama, provinsiTujuan: provinsi, kabKotaTujuan: kabKota, lamaHari: lamaHari });
+    }
+
+    function recalcTripNominatif(tripId) {
+      document.getElementById(tripId).querySelectorAll('.orang-block').forEach(function(w) {
+        if (w.querySelector('.o-nama').value) hitungNominatifRow(w.id, tripId);
+      });
+    }
+
+    function hitungTotalRow(id) {
+      const wrapper = document.getElementById(id);
+      const total = ['n-transportpp','n-transportkedudukan','n-transporttujuan','n-transportlainnya','n-uangharian','n-penginapan','n-uangrepresentatif']
+        .reduce(function(sum, cls) { return sum + (Number(wrapper.querySelector('.' + cls).value) || 0); }, 0);
+      wrapper.querySelector('.n-total').value = total;
+    }
+
+    function hitungLamaHariClient(tglB, tglK) {
+      if (!tglB || !tglK) return 0;
+      const d1 = new Date(tglB), d2 = new Date(tglK);
+      const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+      return diff > 0 ? diff : 0;
+    }
+
+    function cariPengajuan() {
+      const kw = document.getElementById('f_cariEdit').value.toLowerCase().trim();
+      const box = document.getElementById('hasilCariBox');
+      if (!kw) { box.innerHTML = ''; return; }
+      const hasil = daftarPengajuan.filter(function(p) {
+        return (p.tujuan || '').toLowerCase().indexOf(kw) !== -1 || (p.idPengajuan || '').toLowerCase().indexOf(kw) !== -1;
+      }).slice(0, 15);
+      if (hasil.length === 0) {
+        box.innerHTML = '<p style="color:var(--ink-soft); font-size:13px;">Tidak ada hasil.</p>';
+        return;
+      }
+      box.innerHTML = hasil.map(function(p) {
+        return '<div style="padding:8px 12px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; cursor:pointer;" onclick="muatUntukEdit(\'' + p.idPengajuan + '\')">' +
+          '<b>' + p.tujuan + '</b> — ' + p.jumlahOrang + ' orang — ' +
+          '<span class="status-pill ' + (p.status === 'Final' ? 'ok' : '') + '">' + p.status + '</span>' +
+          (p.noSpm ? ' — SPM: ' + p.noSpm : '') +
+          '</div>';
+      }).join('');
+    }
+
+    function muatUntukEdit(idPengajuan) {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (!data) { alert('Data tidak ditemukan.'); return; }
+          editIdPengajuan = idPengajuan;
+          document.getElementById('editIndicator').style.display = '';
+          document.getElementById('btnBuatBaru').style.display = '';
+          document.getElementById('btnSimpan').textContent = 'Update Pengajuan';
+          document.getElementById('btnTambahTrip').style.display = 'none';
+          document.getElementById('hasilCariBox').innerHTML = '';
+          document.getElementById('f_cariEdit').value = '';
+
+          document.getElementById('f_sptjbPilihan').value = data.idSptjb;
+          onSptjbPilihanChange();
+
+          document.getElementById('tripBlocksContainer').innerHTML = '';
+          tripCount = 0;
+          const tripId = tambahTripBlock();
+          const tripWrapper = document.getElementById(tripId);
+          tripWrapper.querySelector('.orangContainer').innerHTML = '';
+
+          tripWrapper.querySelector('.t-tujuan').value = data.trip.tujuan || '';
+          tripWrapper.querySelector('.t-hotelvendor').value = data.trip.hotelVendor || '';
+          tripWrapper.querySelector('.t-tglberangkat').value = data.trip.tglBerangkat || '';
+          tripWrapper.querySelector('.t-tglkembali').value = data.trip.tglKembali || '';
+          tripWrapper.querySelector('.t-nospm').value = data.trip.noSpm || '';
+          tripWrapper.querySelector('.t-nost').value = data.trip.noSt || '';
+          tripWrapper.querySelector('.t-nosk').value = data.trip.noSk || '';
+          tripWrapper.querySelector('.t-tahap').value = data.trip.tahap || '';
+          tripWrapper.querySelector('.t-kegiatantrip').value = data.trip.kegiatanTrip || '';
+
+          setTimeout(function() {
+            tripWrapper.querySelector('.t-provinsi').value = data.trip.provinsi || '';
+            onTripProvinsiChange(tripId);
+            setTimeout(function() {
+              tripWrapper.querySelector('.t-daerah').value = data.trip.daerah || '';
+            }, 1200);
+          }, 400);
+
+          data.orangList.forEach(function(o) {
+            tambahBarisOrang(tripId);
+            const orangWrapper = document.getElementById('orang_' + orangCount);
+            orangWrapper.querySelector('.o-nama').value = o.nama || '';
+            orangWrapper.querySelector('.o-nip').value = o.nip || '';
+            orangWrapper.querySelector('.o-tipe').value = o.tipeId || 'Penyelenggara';
+            orangWrapper.querySelector('.o-kelompok').value = o.namaKelompok || '';
+            orangWrapper.querySelector('.n-transportpp').value = o.transportPP || 0;
+            orangWrapper.querySelector('.n-transportkedudukan').value = o.transportKedudukan || 0;
+            orangWrapper.querySelector('.n-transporttujuan').value = o.transportTujuan || 0;
+            orangWrapper.querySelector('.n-transportlainnya').value = o.transportLainnya || 0;
+            orangWrapper.querySelector('.n-uangharian').value = o.uangHarian || 0;
+            orangWrapper.querySelector('.n-penginapan').value = o.penginapan || 0;
+            orangWrapper.querySelector('.n-uangrepresentatif').value = o.uangRepresentatif || 0;
+            hitungTotalRow(orangWrapper.id);
+          });
+
+          window.scrollTo(0, 0);
+        })
+        .withFailureHandler(function(err) { alert('Gagal memuat data: ' + err.message); })
+        .getPengajuanUntukEdit(idPengajuan);
+    }
+
+    function resetKeFormBaru() {
+      editIdPengajuan = null;
+      document.getElementById('editIndicator').style.display = 'none';
+      document.getElementById('btnBuatBaru').style.display = 'none';
+      document.getElementById('btnSimpan').textContent = 'Simpan Pengajuan';
+      document.getElementById('btnTambahTrip').style.display = '';
+      document.getElementById('f_sptjbPilihan').value = '';
+      onSptjbPilihanChange();
+      document.getElementById('tripBlocksContainer').innerHTML = '';
+      tripCount = 0;
+      tambahTripBlock();
+      ['f_kegiatan','f_tglMulai','f_tglSelesai','f_jumlahPengajuan']
+        .forEach(function(id) { document.getElementById(id).value = ''; });
+      muatPreviewNoSptjb();
+    }
+
+    tambahTripBlock();
+
+    function submitForm() {
+      const tripBlocks = Array.from(document.querySelectorAll('.trip-block'));
+      const tripList = tripBlocks.map(function(tw) {
+        const orangList = Array.from(tw.querySelectorAll('.orang-block')).map(function(wrapper) {
+          return {
+            nama: wrapper.querySelector('.o-nama').value,
+            nip: wrapper.querySelector('.o-nip').value,
+            tipeId: wrapper.querySelector('.o-tipe').value,
+            namaKelompok: wrapper.querySelector('.o-kelompok').value,
+            transportPP: Number(wrapper.querySelector('.n-transportpp').value) || 0,
+            transportKedudukan: Number(wrapper.querySelector('.n-transportkedudukan').value) || 0,
+            transportTujuan: Number(wrapper.querySelector('.n-transporttujuan').value) || 0,
+            transportLainnya: Number(wrapper.querySelector('.n-transportlainnya').value) || 0,
+            uangHarian: Number(wrapper.querySelector('.n-uangharian').value) || 0,
+            penginapan: Number(wrapper.querySelector('.n-penginapan').value) || 0,
+            uangRepresentatif: Number(wrapper.querySelector('.n-uangrepresentatif').value) || 0,
+            totalNominatif: Number(wrapper.querySelector('.n-total').value) || 0
+          };
+        }).filter(function(o) { return o.nama; });
+
+        return {
+          trip: {
+            tujuan: tw.querySelector('.t-tujuan').value,
+            provinsi: tw.querySelector('.t-provinsi').value,
+            daerah: tw.querySelector('.t-daerah').value,
+            hotelVendor: tw.querySelector('.t-hotelvendor').value,
+            tglBerangkat: tw.querySelector('.t-tglberangkat').value,
+            tglKembali: tw.querySelector('.t-tglkembali').value,
+            noSpm: tw.querySelector('.t-nospm').value,
+            noSt: tw.querySelector('.t-nost').value,
+            noSk: tw.querySelector('.t-nosk').value,
+            tahap: tw.querySelector('.t-tahap').value,
+            kegiatanTrip: tw.querySelector('.t-kegiatantrip').value
+          },
+          orangList: orangList
+        };
+      }).filter(function(t) { return t.orangList.length > 0; });
+
+      if (tripList.length === 0) {
+        alert('Isi minimal 1 Surat Tugas dengan minimal 1 orang.');
+        return;
+      }
+
+      const idSptjbPilihan = document.getElementById('f_sptjbPilihan').value;
+      const formData = {
+        sptjbMode: idSptjbPilihan ? 'existing' : 'baru',
+        idSptjbExisting: idSptjbPilihan,
+        idPengajuanEdit: editIdPengajuan || '',
+        sptjbBaru: {
+          kegiatan: document.getElementById('f_kegiatan').value,
+          tglMulai: document.getElementById('f_tglMulai').value,
+          tglSelesai: document.getElementById('f_tglSelesai').value,
+          noAkun: document.getElementById('f_noAkun').value,
+          namaAkun: document.getElementById('f_namaAkun').value,
+          klasifikasiAnggaran: document.getElementById('f_klasifikasiAnggaran').value,
+          jumlahPengajuan: document.getElementById('f_jumlahPengajuan').value
+        },
+        tripList: tripList,
+        token: currentToken
+      };
+
+      document.getElementById('loadingMsg').style.display = '';
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          const box = document.getElementById('resultBox');
+          box.style.display = '';
+          if (res.ok) {
+            box.textContent = (res.isEdit ? 'Berhasil diupdate! ' : 'Berhasil disimpan! ') +
+              (res.noSptjb ? 'No SPTJB: ' + res.noSptjb + '. ' : '') +
+              res.jumlahTrip + ' Surat Tugas, ' + res.jumlahOrang + ' orang total.';
+            setTimeout(function() { window.top.location = '<?= appUrl ?>?page=index&token=' + currentToken; }, 1800);
+          } else {
+            box.textContent = 'Gagal: ' + res.error;
+          }
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('loadingMsg').style.display = 'none';
+          alert('Error: ' + err.message);
+        })
+        .submitPengajuan(formData);
+    }
+  </script>
+</body>
+</html>

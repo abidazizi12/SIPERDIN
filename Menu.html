@@ -1,0 +1,69 @@
+<div class="siperdin-nav" id="siperdinNav">
+  <button type="button" class="nav-toggle" onclick="toggleSiperdinNav()" title="Perkecil/perbesar menu">
+    <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+  </button>
+
+  <div class="brand">
+    <div class="logo-mark">
+      <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    </div>
+    <span class="brand-text">SIPERDIN</span>
+  </div>
+
+  <div class="nav-links">
+    <a target="_top" href="<?= appUrl ?>?page=index&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'index' ? 'active' : '' ?>" title="Dashboard">
+      <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      <span class="nav-text">Dashboard</span>
+    </a>
+    <a target="_top" href="<?= appUrl ?>?page=pengajuan&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'pengajuan' ? 'active' : '' ?>" title="Pengajuan">
+      <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+      <span class="nav-text">Pengajuan</span>
+    </a>
+    <a target="_top" href="<?= appUrl ?>?page=realisasi&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'realisasi' ? 'active' : '' ?>" title="Realisasi">
+      <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+      <span class="nav-text">Realisasi</span>
+    </a>
+    <? if (user && user.role === 'Admin') { ?>
+      <a target="_top" href="<?= appUrl ?>?page=users&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'users' ? 'active' : '' ?>" title="Kelola User">
+        <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span class="nav-text">Kelola User</span>
+      </a>
+      <a target="_top" href="<?= appUrl ?>?page=referensi&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'referensi' ? 'active' : '' ?>" title="Referensi">
+        <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        <span class="nav-text">Referensi</span>
+      </a>
+      <a target="_top" href="<?= appUrl ?>?page=config&token=<?= getCurrentToken_() ?>" class="<?= activePage === 'config' ? 'active' : '' ?>" title="Konfigurasi">
+        <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span class="nav-text">Konfigurasi</span>
+      </a>
+    <? } ?>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="user-badge">
+    <div class="avatar"><?= user && user.nama ? user.nama.trim().charAt(0).toUpperCase() : '?' ?></div>
+    <div class="who">
+      <div class="name"><?= user ? user.nama : '' ?></div>
+      <div class="role"><?= user ? user.role : '' ?></div>
+    </div>
+    <a target="_top" href="<?= appUrl ?>?page=logout" class="logout-link" title="Keluar">
+      <svg class="nav-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+    </a>
+  </div>
+</div>
+
+<script>
+  (function() {
+    try {
+      var nav = document.getElementById('siperdinNav');
+      if (localStorage.getItem('siperdinNavCollapsed') === '1') nav.classList.add('collapsed');
+    } catch (e) { /* localStorage tidak tersedia -- biarkan default (terbuka) */ }
+  })();
+
+  function toggleSiperdinNav() {
+    var nav = document.getElementById('siperdinNav');
+    nav.classList.toggle('collapsed');
+    try { localStorage.setItem('siperdinNavCollapsed', nav.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+  }
+</script>
