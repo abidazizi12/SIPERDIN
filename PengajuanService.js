@@ -2,6 +2,16 @@
  * PengajuanService.gs
  * ------------------------------------------------------------
  * Logic server untuk halaman Form Pengajuan.
+ *
+ * CATATAN STRUKTUR (setelah pemisahan tab SPTJB / Surat Tugas):
+ * - submitSptjb()      -> BUAT SPTJB baru saja (tab "SPTJB").
+ * - submitSuratTugas() -> TAMBAH Surat Tugas (1 atau lebih sekaligus)
+ *                         ke SPTJB yang SUDAH ADA (tab "Surat Tugas").
+ *                         idSptjbExisting bisa SPTJB manapun -- baru
+ *                         maupun lama -- karena dropdown "Pilih SPTJB"
+ *                         di tab Surat Tugas memuat SEMUA SPTJB.
+ * - submitPengajuan()  -> EDIT Surat Tugas yang sudah ada saja
+ *                         (dipanggil dari tab "Cari & Edit").
  * ------------------------------------------------------------
  */
 
@@ -90,31 +100,18 @@ function getSptjbListRingkas_() {
 }
 
 /**
- * Submit form Pengajuan -- dipakai untuk BUAT BARU maupun EDIT data
- * yang sudah ada (kalau formData.idPengajuanEdit diisi). Satu kali
- * submit BISA berisi BEBERAPA Surat Tugas sekaligus (formData.tripList),
- * masing-masing dengan daftar orang & nominatif sendiri -- tapi semua
- * ikut 1 SPTJB & 1 No Akun yang sama.
- *
- * Status per Surat Tugas otomatis: 'Draft' kalau No SPM masih kosong,
- * 'Final' kalau No SPM sudah diisi.
+ * Submit form SPTJB (BARU saja, TANPA Surat Tugas) -- dipanggil dari
+ * tab "SPTJB" di Form Pengajuan. Hanya membuat 1 baris baru di
+ * DB_SPTJB. Untuk menambahkan Surat Tugas ke SPTJB ini (atau ke SPTJB
+ * lain yang sudah ada), gunakan submitSuratTugas().
  *
  * formData = {
- *   sptjbMode: 'baru' | 'existing',
- *   idSptjbExisting: '...',
- *   idPengajuanEdit: '...' // isi kalau EDIT (cuma 1 Surat Tugas saat edit), kosong kalau buat baru
- *   sptjbBaru: { notaDinas, kegiatan, jenis, provinsi, tglMulai, tglSelesai, noAkun, namaAkun, jumlahPengajuan, klasifikasiAnggaran },
- *   tripList: [
- *     { trip: { tujuan, provinsi, daerah, tglBerangkat, tglKembali, hotelVendor, noSpm, tahap, kegiatanTrip, noSt },
- *       orangList: [ { nama, nip, tipeId, noSkPeserta, namaKelompok,
- *                      transportPP, transportKedudukan, transportTujuan, transportLainnya,
- *                      uangHarian, penginapan, uangRepresentatif, totalNominatif }, ... ] },
- *     ... // bisa lebih dari 1 Surat Tugas
- *   ],
- *   token: '...'
+ *   kegiatan, tglMulai, tglSelesai, noAkun, namaAkun,
+ *   klasifikasiAnggaran, jumlahPengajuan, token
  * }
+ * @return {Object} {ok:true, idSptjb, noSptjb, kegiatan} atau {ok:false, error}
  */
-function submitPengajuan(formData) {
+function submitSptjb(formData) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -123,51 +120,68 @@ function submitPengajuan(formData) {
   const emailPengirim = pengirim ? pengirim.email : '(tidak diketahui)';
 
   try {
+    if (!formData.kegiatan) return { ok: false, error: 'Nama Kegiatan wajib diisi.' };
+
     const shSptjb = ss.getSheetByName('DB_SPTJB');
+    const idSptjb = 'SPTJB-2026-' + nextSequence_('SPTJB');
+    const noSptjbAuto = generateNoSptjb_();
+    const rowIdx = shSptjb.getLastRow() + 1;
+    shSptjb.getRange(rowIdx, 1, 1, 19).setValues([[
+      idSptjb, noSptjbAuto, '', formData.kegiatan || '', '',
+      '', '', formData.tglMulai || '', formData.tglSelesai || '',
+      formData.noAkun || '', '', formData.namaAkun || '', '', Number(formData.jumlahPengajuan) || 0,
+      'Aktif', emailPengirim, new Date(), '',
+      formData.klasifikasiAnggaran || ''
+    ]]);
+
+    return { ok: true, idSptjb: idSptjb, noSptjb: noSptjbAuto, kegiatan: formData.kegiatan };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Submit Surat Tugas (satu atau lebih sekaligus) untuk SPTJB yang
+ * SUDAH ADA -- dipanggil dari tab "Surat Tugas". idSptjbExisting bisa
+ * SPTJB MANAPUN (baru maupun lama), sesuai dropdown "Pilih SPTJB" di
+ * tab itu yang memuat SEMUA SPTJB -- jadi Surat Tugas bisa ditambahkan
+ * ke SPTJB lama kapan saja, tidak harus yang baru dibuat.
+ *
+ * No Akun tiap Surat Tugas SELALU ikut No Akun SPTJB induknya -- 1
+ * SPTJB = 1 akun, walau Surat Tugasnya lebih dari 1.
+ *
+ * formData = {
+ *   idSptjbExisting: '...',
+ *   tripList: [
+ *     { trip: { tujuan, provinsi, daerah, tglBerangkat, tglKembali, hotelVendor, noSpm, tahap, kegiatanTrip, noSt, noSk },
+ *       orangList: [ { nama, nip, tipeId, namaKelompok,
+ *                      transportPP, transportKedudukan, transportTujuan, transportLainnya,
+ *                      uangHarian, penginapan, uangRepresentatif, totalNominatif }, ... ] },
+ *     ... // bisa lebih dari 1 Surat Tugas sekaligus
+ *   ],
+ *   token: '...'
+ * }
+ * @return {Object} {ok:true, isEdit:false, status, jumlahTrip, jumlahOrang} atau {ok:false, error}
+ */
+function submitSuratTugas(formData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  const pengirim = getUserByToken_(formData.token);
+  const emailPengirim = pengirim ? pengirim.email : '(tidak diketahui)';
+
+  try {
     const shPengajuan = ss.getSheetByName('DB_PENGAJUAN');
-    const isEdit = !!formData.idPengajuanEdit;
-
-    let idSptjb;
-    let noSptjbAuto = '';
-
-    if (isEdit) {
-      // Mode EDIT: cuma 1 Surat Tugas, pakai idTrip/idPengajuan/idSptjb
-      // yang SUDAH ADA (baris lama dihapus, ditulis ulang).
-      const existing = getPengajuanUntukEdit(formData.idPengajuanEdit);
-      if (!existing) return { ok: false, error: 'Data pengajuan yang mau diedit tidak ditemukan.' };
-      idSptjb = existing.idSptjb;
-      hapusBarisPengajuan_(existing.idPengajuan);
-
-      const noAkunTrip = lookupNoAkunSptjb_(idSptjb);
-      const hasil = tulisSatuTrip_(shPengajuan, formData.tripList[0], idSptjb, noAkunTrip, emailPengirim,
-        existing.idTrip, existing.idPengajuan);
-
-      return {
-        ok: true, isEdit: true, noSptjb: '', status: hasil.status,
-        jumlahTrip: 1, jumlahOrang: hasil.jumlahOrang
-      };
+    const idSptjb = formData.idSptjbExisting;
+    if (!idSptjb) return { ok: false, error: 'Pilih SPTJB terlebih dahulu.' };
+    if (!formData.tripList || formData.tripList.length === 0) {
+      return { ok: false, error: 'Isi minimal 1 Surat Tugas dengan minimal 1 orang.' };
     }
 
-    // ---- Mode BUAT BARU (bisa banyak Surat Tugas sekaligus) ----
-    if (formData.sptjbMode === 'existing') {
-      idSptjb = formData.idSptjbExisting;
-    } else {
-      const s = formData.sptjbBaru;
-      idSptjb = 'SPTJB-2026-' + nextSequence_('SPTJB');
-      noSptjbAuto = generateNoSptjb_();
-      const rowIdx = shSptjb.getLastRow() + 1;
-      shSptjb.getRange(rowIdx, 1, 1, 19).setValues([[
-        idSptjb, noSptjbAuto, '', s.kegiatan || '', '',
-        '', '', s.tglMulai || '', s.tglSelesai || '',
-        s.noAkun || '', '', s.namaAkun || '', '', Number(s.jumlahPengajuan) || 0,
-        'Aktif', emailPengirim, new Date(), '',
-        s.klasifikasiAnggaran || ''
-      ]]);
-    }
-
-    // No Akun trip SELALU ikut No Akun SPTJB-nya -- 1 SPTJB = 1 akun,
-    // tidak bisa beda per Surat Tugas, walau Surat Tugasnya lebih dari 1.
-    const noAkunTrip = (formData.sptjbMode === 'existing' ? lookupNoAkunSptjb_(idSptjb) : formData.sptjbBaru.noAkun) || '';
+    const noAkunTrip = lookupNoAkunSptjb_(idSptjb) || '';
 
     let jumlahOrangTotal = 0;
     let statusTerakhir = '';
@@ -180,7 +194,7 @@ function submitPengajuan(formData) {
     });
 
     return {
-      ok: true, isEdit: false, noSptjb: noSptjbAuto, status: statusTerakhir,
+      ok: true, isEdit: false, status: statusTerakhir,
       jumlahTrip: formData.tripList.length, jumlahOrang: jumlahOrangTotal
     };
   } catch (err) {
@@ -191,9 +205,70 @@ function submitPengajuan(formData) {
 }
 
 /**
+ * Submit EDIT untuk Surat Tugas yang SUDAH ADA (selalu 1 Surat Tugas
+ * per panggilan) -- dipanggil dari tab "Cari & Edit" setelah user
+ * memilih hasil pencarian, lalu klik "Update Surat Tugas" di tab
+ * "Surat Tugas". Untuk data BARU, gunakan submitSptjb() (buat SPTJB)
+ * atau submitSuratTugas() (tambah ST ke SPTJB yang sudah ada).
+ *
+ * formData = {
+ *   idPengajuanEdit: '...', // WAJIB diisi -- ID_Pengajuan yang mau diedit
+ *   tripList: [
+ *     { trip: { tujuan, provinsi, daerah, tglBerangkat, tglKembali, hotelVendor, noSpm, tahap, kegiatanTrip, noSt, noSk },
+ *       orangList: [ {...}, ... ] }
+ *   ], // HANYA elemen pertama yang dipakai (1 Surat Tugas per edit)
+ *   token: '...'
+ * }
+ *
+ * CATATAN KETERBATASAN: cara ini hapus+tulis ulang ID_Baris yang BARU
+ * untuk semua orang (bukan update di tempat) -- jadi kalau pengajuan
+ * yang diedit SUDAH punya data di DB_REALISASI yang tertaut ke
+ * ID_Baris lama, tautannya akan putus. Aman untuk edit pengajuan yang
+ * belum direalisasikan; untuk yang sudah, sebaiknya cek dulu manual.
+ */
+function submitPengajuan(formData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  const pengirim = getUserByToken_(formData.token);
+  const emailPengirim = pengirim ? pengirim.email : '(tidak diketahui)';
+
+  try {
+    const shPengajuan = ss.getSheetByName('DB_PENGAJUAN');
+
+    if (!formData.idPengajuanEdit) {
+      return { ok: false, error: 'submitPengajuan() sekarang hanya untuk mode edit Surat Tugas -- gunakan submitSptjb() untuk SPTJB baru atau submitSuratTugas() untuk Surat Tugas baru.' };
+    }
+    if (!formData.tripList || !formData.tripList[0]) {
+      return { ok: false, error: 'Data Surat Tugas tidak lengkap.' };
+    }
+
+    const existing = getPengajuanUntukEdit(formData.idPengajuanEdit);
+    if (!existing) return { ok: false, error: 'Data pengajuan yang mau diedit tidak ditemukan.' };
+    const idSptjb = existing.idSptjb;
+    hapusBarisPengajuan_(existing.idPengajuan);
+
+    const noAkunTrip = lookupNoAkunSptjb_(idSptjb);
+    const hasil = tulisSatuTrip_(shPengajuan, formData.tripList[0], idSptjb, noAkunTrip, emailPengirim,
+      existing.idTrip, existing.idPengajuan);
+
+    return {
+      ok: true, isEdit: true, noSptjb: '', status: hasil.status,
+      jumlahTrip: 1, jumlahOrang: hasil.jumlahOrang
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Tulis baris DB_PENGAJUAN untuk SATU Surat Tugas (1 idTrip/idPengajuan)
- * beserta semua orangnya. Dipakai berulang oleh submitPengajuan untuk
- * kasus banyak Surat Tugas sekaligus, dan sekali saja untuk kasus edit.
+ * beserta semua orangnya. Dipakai berulang oleh submitSuratTugas untuk
+ * kasus banyak Surat Tugas sekaligus, dan sekali saja oleh
+ * submitPengajuan untuk kasus edit.
  */
 function tulisSatuTrip_(shPengajuan, item, idSptjb, noAkunTrip, emailPengirim, idTrip, idPengajuan) {
   const t = item.trip;
