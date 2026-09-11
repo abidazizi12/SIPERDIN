@@ -71,7 +71,8 @@ function doGet(e) {
         user: user, activePage: 'pengajuan',
         pegawaiList: getPegawaiList_(), sptjbList: getSptjbListRingkas_(),
         refAkun: getRefAkunTree_(), kodeProgram: getKodeProgram_(),
-        daftarPengajuan: getDaftarPengajuanUntukEdit_()
+        daftarPengajuan: getDaftarPengajuanUntukEdit_(),
+        daftarSptjbPrint: getSptjbListUntukPrint_()
       });
     case 'realisasi':
       return renderPage_('FormRealisasi', { user: user, activePage: 'realisasi', pengajuanList: getPengajuanListUntukRealisasi_() });
