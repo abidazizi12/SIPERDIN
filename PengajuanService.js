@@ -3,15 +3,23 @@
  * ------------------------------------------------------------
  * Logic server untuk halaman Form Pengajuan.
  *
- * CATATAN STRUKTUR (setelah pemisahan tab SPTJB / Surat Tugas):
- * - submitSptjb()      -> BUAT SPTJB baru saja (tab "SPTJB").
- * - submitSuratTugas() -> TAMBAH Surat Tugas (1 atau lebih sekaligus)
- *                         ke SPTJB yang SUDAH ADA (tab "Surat Tugas").
- *                         idSptjbExisting bisa SPTJB manapun -- baru
- *                         maupun lama -- karena dropdown "Pilih SPTJB"
- *                         di tab Surat Tugas memuat SEMUA SPTJB.
- * - submitPengajuan()  -> EDIT Surat Tugas yang sudah ada saja
- *                         (dipanggil dari tab "Cari & Edit").
+ * CATATAN FITUR "BAGI PER KELOMPOK DAERAH" (multi-destinasi personil
+ * dalam 1 Surat Tugas):
+ * - TIDAK ADA PERUBAHAN SKEMA. Kolom Tujuan/Provinsi/Daerah di
+ *   DB_PENGAJUAN sudah per-baris (per-orang) sejak awal -- yang baru
+ *   adalah tulisSatuTrip_() sekarang membolehkan tiap orang punya
+ *   tujuan/provinsi/daerah SENDIRI (override), fallback ke nilai trip
+ *   kalau tidak diisi (mode "Satu Daerah Bersama" -- 100% backward
+ *   compatible dengan data lama).
+ * - getPengajuanUntukEdit() mendeteksi otomatis apakah sebuah Surat
+ *   Tugas punya >1 kombinasi Provinsi+Daerah berbeda di antara
+ *   baris-barisnya -> mode 'kelompok', lalu direkonstruksi jadi
+ *   kelompokList untuk diedit. Kalau cuma 1 kombinasi -> mode
+ *   'standar' seperti sebelumnya.
+ * - cetakDaftarNominatif (DokumenService.gs), getDashboardData_
+ *   (Code.gs), getPengajuanListUntukRealisasi_ (RealisasiService.gs)
+ *   SUDAH membaca Tujuan/Provinsi per BARIS -- jadi otomatis kompatibel
+ *   dengan data kelompok tanpa perlu diubah (sudah dicek).
  * ------------------------------------------------------------
  */
 
@@ -145,21 +153,19 @@ function submitSptjb(formData) {
 /**
  * Submit Surat Tugas (satu atau lebih sekaligus) untuk SPTJB yang
  * SUDAH ADA -- dipanggil dari tab "Surat Tugas". idSptjbExisting bisa
- * SPTJB MANAPUN (baru maupun lama), sesuai dropdown "Pilih SPTJB" di
- * tab itu yang memuat SEMUA SPTJB -- jadi Surat Tugas bisa ditambahkan
- * ke SPTJB lama kapan saja, tidak harus yang baru dibuat.
+ * SPTJB MANAPUN (baru maupun lama).
  *
- * No Akun tiap Surat Tugas SELALU ikut No Akun SPTJB induknya -- 1
- * SPTJB = 1 akun, walau Surat Tugasnya lebih dari 1.
+ * No Akun tiap Surat Tugas SELALU ikut No Akun SPTJB induknya.
  *
  * formData = {
  *   idSptjbExisting: '...',
  *   tripList: [
  *     { trip: { tujuan, provinsi, daerah, tglBerangkat, tglKembali, hotelVendor, noSpm, tahap, kegiatanTrip, noSt, noSk },
  *       orangList: [ { nama, nip, tipeId, namaKelompok,
+ *                      tujuan, provinsi, daerah, // opsional -- override per-orang untuk mode "kelompok"
  *                      transportPP, transportKedudukan, transportTujuan, transportLainnya,
  *                      uangHarian, penginapan, uangRepresentatif, totalNominatif }, ... ] },
- *     ... // bisa lebih dari 1 Surat Tugas sekaligus
+ *     ...
  *   ],
  *   token: '...'
  * }
@@ -206,25 +212,18 @@ function submitSuratTugas(formData) {
 
 /**
  * Submit EDIT untuk Surat Tugas yang SUDAH ADA (selalu 1 Surat Tugas
- * per panggilan) -- dipanggil dari tab "Cari & Edit" setelah user
- * memilih hasil pencarian, lalu klik "Update Surat Tugas" di tab
- * "Surat Tugas". Untuk data BARU, gunakan submitSptjb() (buat SPTJB)
- * atau submitSuratTugas() (tambah ST ke SPTJB yang sudah ada).
+ * per panggilan) -- dipanggil dari tab "Cari & Edit".
  *
  * formData = {
- *   idPengajuanEdit: '...', // WAJIB diisi -- ID_Pengajuan yang mau diedit
- *   tripList: [
- *     { trip: { tujuan, provinsi, daerah, tglBerangkat, tglKembali, hotelVendor, noSpm, tahap, kegiatanTrip, noSt, noSk },
- *       orangList: [ {...}, ... ] }
- *   ], // HANYA elemen pertama yang dipakai (1 Surat Tugas per edit)
+ *   idPengajuanEdit: '...',
+ *   tripList: [ { trip: {...}, orangList: [...] } ], // hanya elemen pertama dipakai
  *   token: '...'
  * }
  *
- * CATATAN KETERBATASAN: cara ini hapus+tulis ulang ID_Baris yang BARU
- * untuk semua orang (bukan update di tempat) -- jadi kalau pengajuan
- * yang diedit SUDAH punya data di DB_REALISASI yang tertaut ke
- * ID_Baris lama, tautannya akan putus. Aman untuk edit pengajuan yang
- * belum direalisasikan; untuk yang sudah, sebaiknya cek dulu manual.
+ * CATATAN KETERBATASAN: hapus+tulis ulang ID_Baris BARU untuk semua
+ * orang (bukan update di tempat) -- kalau pengajuan yang diedit SUDAH
+ * punya data di DB_REALISASI yang tertaut ke ID_Baris lama, tautannya
+ * akan putus. Aman untuk edit pengajuan yang belum direalisasikan.
  */
 function submitPengajuan(formData) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -238,7 +237,7 @@ function submitPengajuan(formData) {
     const shPengajuan = ss.getSheetByName('DB_PENGAJUAN');
 
     if (!formData.idPengajuanEdit) {
-      return { ok: false, error: 'submitPengajuan() sekarang hanya untuk mode edit Surat Tugas -- gunakan submitSptjb() untuk SPTJB baru atau submitSuratTugas() untuk Surat Tugas baru.' };
+      return { ok: false, error: 'submitPengajuan() sekarang hanya untuk mode edit Surat Tugas -- gunakan submitSptjb() atau submitSuratTugas() untuk data baru.' };
     }
     if (!formData.tripList || !formData.tripList[0]) {
       return { ok: false, error: 'Data Surat Tugas tidak lengkap.' };
@@ -266,9 +265,13 @@ function submitPengajuan(formData) {
 
 /**
  * Tulis baris DB_PENGAJUAN untuk SATU Surat Tugas (1 idTrip/idPengajuan)
- * beserta semua orangnya. Dipakai berulang oleh submitSuratTugas untuk
- * kasus banyak Surat Tugas sekaligus, dan sekali saja oleh
- * submitPengajuan untuk kasus edit.
+ * beserta semua orangnya.
+ *
+ * PERUBAHAN (fitur kelompok daerah): setiap orang BOLEH punya
+ * tujuan/provinsi/daerah SENDIRI (o.tujuan/o.provinsi/o.daerah) yang
+ * meng-override nilai trip-level (t.tujuan/t.provinsi/t.daerah).
+ * Kalau tidak diisi (mode "Satu Daerah Bersama"), fallback ke nilai
+ * trip seperti sebelumnya -- 100% backward compatible.
  */
 function tulisSatuTrip_(shPengajuan, item, idSptjb, noAkunTrip, emailPengirim, idTrip, idPengajuan) {
   const t = item.trip;
@@ -276,12 +279,15 @@ function tulisSatuTrip_(shPengajuan, item, idSptjb, noAkunTrip, emailPengirim, i
 
   const rows = item.orangList.map(function (o) {
     const idBaris = 'BR-' + nextSequence_('BARIS');
+    const tujuanOrang = o.tujuan || t.tujuan || '';
+    const provinsiOrang = o.provinsi || t.provinsi || '';
+    const daerahOrang = o.daerah || t.daerah || '';
     return [
       idBaris, idTrip, idPengajuan, idSptjb,
       noAkunTrip,
       t.noSpm || '', t.tahap || '', t.kegiatanTrip || '',
       o.nama || '', o.nip || '', o.tipeId || '', t.noSk || '', o.namaKelompok || '',
-      '', t.tujuan || '', t.provinsi || '', t.daerah || '',
+      '', tujuanOrang, provinsiOrang, daerahOrang,
       t.tglBerangkat || '', t.tglKembali || '', hitungLamaHari_(t.tglBerangkat, t.tglKembali),
       t.hotelVendor || '', item.orangList.length,
       status, '', '', '',
@@ -307,14 +313,6 @@ function tulisSatuTrip_(shPengajuan, item, idSptjb, noAkunTrip, emailPengirim, i
 /**
  * Hapus semua baris DB_PENGAJUAN milik satu ID_Pengajuan (dipakai
  * saat mode EDIT, sebelum menulis ulang baris terbaru).
- *
- * CATATAN KETERBATASAN: cara ini hapus+tulis ulang ID_Baris yang BARU
- * untuk semua orang (bukan update di tempat) -- jadi kalau pengajuan
- * yang diedit SUDAH punya data di DB_REALISASI yang tertaut ke
- * ID_Baris lama, tautannya akan putus (Realisasi jadi "nyantol" ke
- * ID_Baris yang sudah tidak ada). Aman untuk edit pengajuan yang
- * belum direalisasikan; untuk yang sudah, sebaiknya cek dulu manual
- * atau kabari saya kalau perlu dibuatkan proteksinya.
  */
 function hapusBarisPengajuan_(idPengajuan) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DB_PENGAJUAN');
@@ -325,9 +323,17 @@ function hapusBarisPengajuan_(idPengajuan) {
 }
 
 /**
- * Dipanggil dari client untuk memuat ulang satu Pengajuan (semua
- * orang dalam 1 trip) ke form, supaya bisa diedit. TIDAK pakai
- * akhiran "_" karena dipanggil lewat google.script.run.
+ * Dipanggil dari client untuk memuat ulang satu Pengajuan (Surat
+ * Tugas) ke form, supaya bisa diedit.
+ *
+ * PERUBAHAN (fitur kelompok daerah): fungsi ini sekarang MENDETEKSI
+ * OTOMATIS apakah Surat Tugas ini punya lebih dari 1 kombinasi
+ * Provinsi+Daerah berbeda di antara baris-barisnya:
+ * - Kalau HANYA 1 kombinasi -> mode: 'standar' (perilaku lama,
+ *   orangList diisi seperti biasa, kelompokList kosong).
+ * - Kalau LEBIH dari 1 kombinasi -> mode: 'kelompok', orangList
+ *   dikosongkan dan kelompokList diisi per kombinasi
+ *   (provinsi, daerah, tujuan, namaKelompok, orangList).
  */
 function getPengajuanUntukEdit(idPengajuan) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DB_PENGAJUAN');
@@ -340,24 +346,43 @@ function getPengajuanUntukEdit(idPengajuan) {
   if (rows.length === 0) return null;
 
   const first = rows[0];
+
+  const comboOrder = [];
+  const comboMap = {};
+  rows.forEach(function (row) {
+    const provinsi = row[15] || '';
+    const daerah = row[16] || '';
+    const key = provinsi + '||' + daerah;
+    if (!comboMap[key]) {
+      comboMap[key] = {
+        provinsi: provinsi, daerah: daerah, tujuan: row[14] || '',
+        namaKelompok: row[12] || '', orangList: []
+      };
+      comboOrder.push(key);
+    }
+    comboMap[key].orangList.push({
+      nama: row[8], nip: row[9], tipeId: row[10], namaKelompok: row[12],
+      transportPP: row[30], transportKedudukan: row[31], transportTujuan: row[32],
+      uangHarian: row[33], penginapan: row[34], uangRepresentatif: row[35], totalNominatif: row[36],
+      transportLainnya: row[37] || 0
+    });
+  });
+
+  const isKelompok = comboOrder.length > 1;
+
   return {
     idPengajuan: idPengajuan,
     idTrip: first[1],
     idSptjb: first[3],
+    mode: isKelompok ? 'kelompok' : 'standar',
     trip: {
       tujuan: first[14], provinsi: first[15], daerah: first[16],
       tglBerangkat: formatTanggalInput_(first[17]), tglKembali: formatTanggalInput_(first[18]),
       hotelVendor: first[20], noSpm: first[5], noSt: first[29], noSk: first[11],
       tahap: first[6], kegiatanTrip: first[7]
     },
-    orangList: rows.map(function (row) {
-      return {
-        nama: row[8], nip: row[9], tipeId: row[10], namaKelompok: row[12],
-        transportPP: row[30], transportKedudukan: row[31], transportTujuan: row[32],
-        uangHarian: row[33], penginapan: row[34], uangRepresentatif: row[35], totalNominatif: row[36],
-        transportLainnya: row[37] || 0
-      };
-    })
+    orangList: isKelompok ? [] : comboMap[comboOrder[0]].orangList,
+    kelompokList: isKelompok ? comboOrder.map(function (k) { return comboMap[k]; }) : []
   };
 }
 
@@ -365,6 +390,10 @@ function getPengajuanUntukEdit(idPengajuan) {
  * Daftar ringkas semua Pengajuan (dikelompokkan per ID_Pengajuan)
  * untuk ditampilkan di form supaya bisa dipilih untuk di-Edit.
  * Dipanggil dari server (Code.gs doGet), bukan dari client.
+ *
+ * PERUBAHAN: kalau satu Surat Tugas ternyata punya lebih dari 1
+ * tujuan unik (mode kelompok), label tujuan yang ditampilkan jadi
+ * "<tujuan pertama> + N daerah lain" supaya tidak menyesatkan.
  */
 function getDaftarPengajuanUntukEdit_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DB_PENGAJUAN');
@@ -383,13 +412,23 @@ function getDaftarPengajuanUntukEdit_() {
         tglKembali: formatTanggal_(data[r][18]),
         jumlahOrang: 0,
         status: data[r][22] || '-',
-        noSpm: data[r][5] || ''
+        noSpm: data[r][5] || '',
+        _tujuanSet: {}
       };
       order.push(idPengajuan);
     }
     map[idPengajuan].jumlahOrang++;
+    if (data[r][14]) map[idPengajuan]._tujuanSet[data[r][14]] = true;
   }
-  return order.map(function (id) { return map[id]; }).reverse();
+  return order.map(function (id) {
+    const item = map[id];
+    const tujuanUnik = Object.keys(item._tujuanSet);
+    delete item._tujuanSet;
+    if (tujuanUnik.length > 1) {
+      item.tujuan = tujuanUnik[0] + ' + ' + (tujuanUnik.length - 1) + ' daerah lain';
+    }
+    return item;
+  }).reverse();
 }
 
 function formatTanggalInput_(v) {
@@ -445,8 +484,6 @@ function toRoman_(num) {
 /**
  * Generate No SPTJB otomatis dengan format resmi:
  *   3/{nomor urut per tahun}/PK.03.03/{bulan romawi}/{tahun}
- * Nomor urut reset tiap tahun (pakai tanggal SAAT INI, bukan
- * tanggal mulai kegiatan -- sesuai kebiasaan penomoran resmi).
  */
 function generateNoSptjb_() {
   const now = new Date();
@@ -460,16 +497,8 @@ function generateNoSptjb_() {
 }
 
 /**
- * Dipanggil dari client (google.script.run) untuk MENAMPILKAN di form
- * nomor SPTJB yang AKAN terbentuk kalau pengajuan disimpan sekarang --
- * TANPA memakai/mengunci nomornya (beda dari generateNoSptjb_ yang
- * menambah counter permanen). Jadi aman dipanggil berkali-kali
- * (refresh halaman, ganti tab, dst) tanpa bikin nomor "loncat" gara-gara
- * dibuka tapi tidak pernah disimpan.
- *
- * CATATAN: kalau form dibuka menjelang pergantian bulan/tahun, nomor
- * preview ini bisa beda tipis dari nomor final (yang dihitung ulang
- * saat submit) -- itu wajar, bukan bug.
+ * Preview No SPTJB berikutnya TANPA mengunci counter -- aman dipanggil
+ * berkali-kali (refresh halaman, ganti tab, dst).
  */
 function previewNoSptjb() {
   const now = new Date();
@@ -491,10 +520,7 @@ function nextSequence_(key) {
 
 /**
  * PENTING: jalankan fungsi ini SEKALI SAJA sebelum pertama kali pakai
- * form Pengajuan/Realisasi -- supaya nomor urut baru (SPTJB-2026-xxxx,
- * PENG-2026-xxxx, dst) tidak bentrok dengan ID hasil migrasi historis.
- * Fungsi ini scan ID tertinggi yang sudah ada, lalu set Properties
- * mulai dari situ.
+ * form Pengajuan/Realisasi.
  */
 function initSequencesV1() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -517,13 +543,10 @@ function initSequencesV1() {
 
   props.setProperty('SEQ_SPTJB', String(maxSuffix('DB_SPTJB', 0, 'SPTJB-2026-')));
   props.setProperty('SEQ_PENG', String(maxSuffix('DB_PENGAJUAN', 2, 'PENG-2026-')));
-  // TRIP dan BARIS format lama beda (P/xxx, P/xxx/n) -- mulai dari 0 aman
-  // karena prefix baru (TRIP-, BR-) tidak akan pernah bentrok dgn format lama.
   props.setProperty('SEQ_TRIP', '0');
   props.setProperty('SEQ_BARIS', '0');
   props.setProperty('SEQ_REAL', String(maxSuffix('DB_REALISASI', 0, 'REAL-')));
 
-  // Seed nomor urut SPTJB per tahun dari data lama, format "3/{n}/PK.03.03/{romawi}/{tahun}"
   seedNoSptjbCounters_(ss, props);
 
   Logger.log('Sequence diinisialisasi: ' + JSON.stringify(props.getProperties()));
@@ -552,22 +575,6 @@ function seedNoSptjbCounters_(ss, props) {
 /**
  * ============================================================================
  * MODUL SARAN NOMINATIF OTOMATIS — form Pengajuan SIPERDIN
- * ----------------------------------------------------------------------------
- * Tujuan: begitu user isi nama pegawai + tujuan + tanggal di form Pengajuan,
- * sistem menarik batas MAKSIMAL tarif dari sheet REF_TARIF (sesuai PMK 32/2025)
- * untuk tiap komponen biaya, lalu mem-prefill field angka di form.
- * Field tsb tetap <input type="number"> biasa (BUKAN readonly) — user bisa
- * turunkan manual karena SBM adalah batas atas, bukan angka pasti.
- *
- * CATATAN PENTING:
- * - Nama judul blok & nama kolom di bawah ini adalah ASUMSI berdasarkan hasil
- *   kerja sebelumnya (REF_TARIF berisi 7 blok berjejer samping: REF_UH_PEGAWAI,
- *   REF_HOTEL_PEJABAT, REF_FULLBOARD_PESERTA, REF_SEWA_MOBIL,
- *   REF_TRANSPORT_PESERTA, REF_TAKSI, REF_TIKET_PESAWAT).
- *   Cek TITLE_KEYWORDS & kandidat nama kolom di findColIndex_ terhadap sheet
- *   REF_TARIF asli — sesuaikan string-nya kalau beda.
- * - Uang Representatif BELUM ada blok referensinya → sengaja dikembalikan 0
- *   dengan TODO, supaya user isi manual sampai blok itu ditambahkan.
  * ============================================================================
  */
 
@@ -583,19 +590,11 @@ var TITLE_KEYWORDS = {
   TIKET_PESAWAT: 'tiket pesawat'
 };
 
-/**
- * Fungsi utama — dipanggil dari Form.html lewat google.script.run.
- * @param {Object} p {namaPegawai, provinsiTujuan, kabKotaTujuan, lamaHari}
- * @return {Object} breakdown nominatif per komponen + total
- */
 function hitungNominatifSaran(p) {
   var pegawai = getPegawaiByNama_(p.namaPegawai);
   var blok = getBlokRefTarif_();
 
   var transportPP = cariTiketPesawat_(blok.TIKET_PESAWAT, 'Jakarta', p.kabKotaTujuan, pegawai.golongan);
-  // TAKSI di REF_TARIF diindeks per PROVINSI (bukan per kota) -- jadi
-  // kedudukan (asal) pakai provinsi DKI Jakarta, tujuan pakai provinsi
-  // tujuan trip, BUKAN nama kab/kota-nya.
   var transportKedudukan = cariTaksi_(blok.TAKSI, 'D.K.I. Jakarta');
   var transportTujuan = cariTaksi_(blok.TAKSI, p.provinsiTujuan);
   if (!transportTujuan) {
@@ -642,8 +641,6 @@ function getBlokRefTarif_(skipCache) {
   var currentStart = null;
 
   for (var c = 0; c < lastCol; c++) {
-    // pakai normalisasi_ (bukan toLowerCase/trim biasa) supaya spasi ganda
-    // atau spasi tak biasa di judul sheet tidak bikin deteksi blok gagal
     var titleCell = normalisasi_(titleRow[c]);
     if (titleCell) {
       if (currentKey) {
@@ -657,7 +654,7 @@ function getBlokRefTarif_(skipCache) {
     blocks[currentKey] = closeBlock_(sheet, currentStart, lastCol, headerRow);
   }
 
-  cache.put('BLOK_REF_TARIF', JSON.stringify(blocks), 300); // cache 5 menit
+  cache.put('BLOK_REF_TARIF', JSON.stringify(blocks), 300);
   return blocks;
 }
 
@@ -690,8 +687,6 @@ function findColIndex_(headers, candidates) {
 function normalisasi_(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
-
-// --- Pencari per blok ---------------------------------------------------
 
 function cariUhPegawai_(blokData, provinsi, jenis) {
   if (!blokData) return 0;
@@ -777,19 +772,12 @@ function cariTiketPesawat_(blokData, kotaAsal, kotaTujuan, golongan) {
   return 0;
 }
 
-/**
- * Aturan kelas tiket bisnis biasanya untuk pejabat eselon I/II (golongan IV/d ke atas).
- * TODO: sesuaikan ambang golongan ini dengan aturan resmi di PMK 32/2025 jika beda.
- */
 function golonganTermasukBisnis_(golongan) {
   if (!golongan) return false;
   var g = String(golongan).toUpperCase().replace(/\s+/g, '');
   return g.indexOf('IV/D') !== -1 || g.indexOf('IV/E') !== -1 || g.indexOf('IVD') !== -1 || g.indexOf('IVE') !== -1;
 }
 
-/**
- * Ambil data pegawai (golongan, golongan_hotel) dari REF_PEGAWAI berdasar nama.
- */
 function getPegawaiByNama_(nama) {
   var sheet = SpreadsheetApp.getActive().getSheetByName('REF_PEGAWAI');
   var data = sheet.getDataRange().getValues();
@@ -811,19 +799,10 @@ function getPegawaiByNama_(nama) {
   return { nama: nama, golongan: '', golonganHotel: '' };
 }
 
-/**
- * DIAGNOSTIK — jalankan fungsi ini manual dari editor Apps Script
- * (pilih debugRefTarif di dropdown atas, klik Run), lalu buka
- * Executions / View > Logs untuk lihat hasilnya.
- * Ini akan menunjukkan blok apa saja yang berhasil terdeteksi di
- * REF_TARIF, dan nama kolom (header) yang terbaca di tiap blok —
- * supaya kita bisa cocokkan dengan TITLE_KEYWORDS & findColIndex_
- * kalau ada yang tidak match.
- */
 function debugRefTarif() {
   var sheet = SpreadsheetApp.getActive().getSheetByName(REF_TARIF_SHEET_NAME);
   if (!sheet) {
-    Logger.log('❌ Sheet "' + REF_TARIF_SHEET_NAME + '" TIDAK DITEMUKAN. Cek nama sheet persis.');
+    Logger.log('Sheet "' + REF_TARIF_SHEET_NAME + '" TIDAK DITEMUKAN. Cek nama sheet persis.');
     return;
   }
 
@@ -832,15 +811,15 @@ function debugRefTarif() {
   Logger.log('=== Baris judul (row 1), mentah ===');
   Logger.log(JSON.stringify(titleRow));
 
-  var blok = getBlokRefTarif_(true); // skip cache, baca ulang dari sheet
+  var blok = getBlokRefTarif_(true);
   var keys = Object.keys(blok);
   Logger.log('=== Blok yang TERDETEKSI: ' + (keys.length ? keys.join(', ') : '(tidak ada satupun)') + ' ===');
 
   Object.keys(TITLE_KEYWORDS).forEach(function (key) {
     if (blok[key]) {
-      Logger.log('✅ ' + key + ' → headers: ' + JSON.stringify(blok[key].headers) + ' | jumlah baris data: ' + blok[key].data.length);
+      Logger.log(key + ' -> headers: ' + JSON.stringify(blok[key].headers) + ' | jumlah baris data: ' + blok[key].data.length);
     } else {
-      Logger.log('❌ ' + key + ' TIDAK terdeteksi (cari kata kunci "' + TITLE_KEYWORDS[key] + '" di baris judul)');
+      Logger.log(key + ' TIDAK terdeteksi (cari kata kunci "' + TITLE_KEYWORDS[key] + '" di baris judul)');
     }
   });
 
@@ -850,18 +829,13 @@ function debugRefTarif() {
   Logger.log(JSON.stringify(getDaerahByProvinsi('Jawa Barat')));
 }
 
-/**
- * DIAGNOSTIK Transport Tiket -- jalankan manual dari editor, isi
- * parameter di baris pemanggilan paling bawah sesuai kasus yang
- * bermasalah, lalu cek Logs.
- */
 function debugTiketPesawat() {
-  var kotaTujuan = 'Kota Medan'; // GANTI sesuai kab/kota yang dicoba di form
-  var golongan = 'III/a'; // GANTI sesuai golongan pegawai yang dicoba
+  var kotaTujuan = 'Kota Medan';
+  var golongan = 'III/a';
 
   var blok = getBlokRefTarif_(true);
   var b = blok.TIKET_PESAWAT;
-  if (!b) { Logger.log('❌ Blok TIKET_PESAWAT tidak terdeteksi sama sekali.'); return; }
+  if (!b) { Logger.log('Blok TIKET_PESAWAT tidak terdeteksi sama sekali.'); return; }
 
   Logger.log('=== Header blok TIKET_PESAWAT ===');
   Logger.log(JSON.stringify(b.headers));
@@ -876,9 +850,7 @@ function debugTiketPesawat() {
   Logger.log('=== Hasil cariTiketPesawat_("Jakarta", "' + kotaTujuan + '", "' + golongan + '") ===');
   Logger.log('Tarif ditemukan: ' + hasil);
 
-  // Tampilkan semua baris yang "tujuan"-nya mengandung sebagian kata dari kotaTujuan,
-  // untuk lihat format asli penulisan kota di REF_TARIF
-  var kw = normalisasi_(kotaTujuan).split(' ').pop(); // kata terakhir, mis. "medan" dari "kota medan"
+  var kw = normalisasi_(kotaTujuan).split(' ').pop();
   Logger.log('=== Baris yang mengandung kata "' + kw + '" di kolom manapun ===');
   b.data.forEach(function (row) {
     var gabung = row.join(' | ').toLowerCase();
